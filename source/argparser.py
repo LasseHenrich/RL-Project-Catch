@@ -62,6 +62,8 @@ def get_args():
     parser.add_argument("--periodic_resetting_strategy", type=str, default="only_final",
                         choices=["only_final", "all_ff"],
                         help="Strategy for periodic resetting of the last layer.")
+    parser.add_argument("--replay_ratio", type=int, default=1.0,
+                        help="Number of replay updates per environment step.")
 
     args = parser.parse_args()
     return args

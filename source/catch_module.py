@@ -52,6 +52,7 @@ class CatchRLModule(LightningModule):
                  periodic_resetting_interval: int = 0,
                  periodic_resetting_strategy: str = "only_final",
                  max_epochs: int = 100,
+                 replay_ratio: int = 1,
                  *args: Any,
                  **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
@@ -233,11 +234,25 @@ class CatchRLModule(LightningModule):
         return td_target
 
     def training_step(self, batch: Trajectory | PRIORITIZED_TRAJECTORY, batch_idx: int) -> Tensor:
-        do_step = self.batch_step % self.hparams.batches_per_step == 0
+        # We perform one environment step every `replay_ratio` gradient steps.
+        # On other steps, we only perform training (sample from replay buffer).
+        # `do_step` is True on the iteration where we call agent.step().
+        if not hasattr(self, "batch_step"):
+            self.batch_step = 0
+
+        replay_ratio = getattr(self.hparams, "replay_ratio", 1)
+        # Defensive: ensure replay_ratio >= 1
+        if replay_ratio is None or replay_ratio < 1:
+            replay_ratio = 1
+
+        do_step = (self.batch_step % replay_ratio) == 0
         self.batch_step += 1
 
         if do_step:
             reward, terminal = self.agent.step()
+        else:
+            # No env interaction on this gradient step
+            reward, terminal = 0.0, False
 
         if self.hparams.prioritized_replay:
             batch, indices, weights = batch
