@@ -49,7 +49,8 @@ class CatchRLModule(LightningModule):
                  hidden_size: int = 128,
                  n_filters: int = 32,
                  paddle_width: int = 5,
-                 periodic_resetting: int = 0,
+                 periodic_resetting_interval: int = 0,
+                 periodic_resetting_strategy: str = "only_final",
                  max_epochs: int = 100,
                  *args: Any,
                  **kwargs: Any) -> None:
@@ -116,11 +117,16 @@ class CatchRLModule(LightningModule):
         # Helper function: collect FC layers
         # ------------------------------
         def get_last_layer_params(net):
-            layers = []
-            for m in net.ff:
-                if isinstance(m, nn.Linear):
-                    layers.append(m)
-            return layers
+            layers = [m for m in net.ff if isinstance(m, nn.Linear)]
+            if len(layers) == 0:
+                raise RuntimeError("No Linear layers found in FF head.")
+
+            if self.hparams.periodic_resetting_strategy == "only_final":
+                return [layers[-1]]  # last linear layer (Q-head)
+            elif self.hparams.periodic_resetting_strategy == "all_ff":
+                return layers
+            else:
+                raise NotImplementedError
 
         q_last_layers = get_last_layer_params(self.Q_network)
         tgt_last_layers = get_last_layer_params(self.target_Q_network)
@@ -303,8 +309,8 @@ class CatchRLModule(LightningModule):
     def on_train_epoch_end(self) -> None:
         self.test_epoch()
 
-        if (self.hparams.periodic_resetting > 0 and
-            (self.current_epoch+1) % self.hparams.periodic_resetting == 0 and
+        if (self.hparams.periodic_resetting_interval > 0 and
+            (self.current_epoch+1) % self.hparams.periodic_resetting_interval == 0 and
             self.current_epoch + 1 < self.hparams.max_epochs):
             self.reinit_last_layer()
 

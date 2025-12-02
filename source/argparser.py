@@ -57,8 +57,11 @@ def get_args():
                         help="If a checkpoint path is provided, start training from scratch (epoch 0) using the checkpoint's weights, rather than resuming the full training state.")
     parser.add_argument("--reinit_last_layer", action="store_true",
                         help="When loading from a checkpoint, re-initialize the last layer with random weights.")
-    parser.add_argument("--periodic_resetting", type=int, default=0,
+    parser.add_argument("--periodic_resetting_interval", type=int, default=0,
                         help="If n > 0, re-initialize the last layer every n episodes.")
+    parser.add_argument("--periodic_resetting_strategy", type=str, default="only_final",
+                        choices=["only_final", "all_ff"],
+                        help="Strategy for periodic resetting of the last layer.")
 
     args = parser.parse_args()
     return args
