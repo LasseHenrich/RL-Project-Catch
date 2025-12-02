@@ -53,6 +53,8 @@ def get_args():
                         help="Width of the paddle in the Catch environment.")
     parser.add_argument("--ckpt_path", type=str, default=None,
                         help="Path to a pre-trained model checkpoint to resume training from.")
+    parser.add_argument("--start_from_scratch_with_ckpt", action="store_true",
+                        help="If a checkpoint path is provided, start training from scratch (epoch 0) using the checkpoint's weights, rather than resuming the full training state.")
 
     args = parser.parse_args()
     return args

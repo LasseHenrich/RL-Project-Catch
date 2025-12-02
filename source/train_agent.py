@@ -3,6 +3,7 @@ import random
 from pathlib import Path
 from typing import List
 
+import torch
 from pytorch_lightning import Trainer
 from pytorch_lightning.loggers import CSVLogger, WandbLogger
 
@@ -24,6 +25,7 @@ def train(hparams, config=None):
 
     hparams: dict = vars(hparams)
     ckpt_path = hparams.pop("ckpt_path")
+    start_from_scratch_with_ckpt = hparams.pop("start_from_scratch_with_ckpt")
     hparams.pop('run_name')
     max_epochs = hparams.pop('max_epochs')
     log_video = hparams.pop('log_video')
@@ -35,6 +37,13 @@ def train(hparams, config=None):
     hparams = {**hparams, **config} if config else hparams
 
     catch_module = CatchRLModule(**hparams)
+
+    if ckpt_path and start_from_scratch_with_ckpt:
+        print(f"Loading model weights from {ckpt_path} for transfer learning, but starting training from scratch.")
+        checkpoint = torch.load(ckpt_path, map_location=lambda storage, loc: storage)
+        catch_module.load_state_dict(checkpoint["state_dict"])
+        ckpt_path = None # Ensure trainer.fit starts from scratch
+
     trainer = Trainer(max_epochs=max_epochs,
                       logger=[logger, csv_logger],
                       log_every_n_steps=1,
