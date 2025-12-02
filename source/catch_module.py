@@ -50,6 +50,7 @@ class CatchRLModule(LightningModule):
                  n_filters: int = 32,
                  paddle_width: int = 5,
                  periodic_resetting: int = 0,
+                 max_epochs: int = 100,
                  *args: Any,
                  **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
@@ -297,13 +298,15 @@ class CatchRLModule(LightningModule):
                 if self.episode % self.hparams.episodes_per_epoch == 0:
                     self.dataset.end()
 
-                if self.hparams.periodic_resetting > 0 and self.episode % self.hparams.periodic_resetting == 0:
-                    self.reinit_last_layer()
-
         return loss
 
     def on_train_epoch_end(self) -> None:
         self.test_epoch()
+
+        if (self.hparams.periodic_resetting > 0 and
+            (self.current_epoch+1) % self.hparams.periodic_resetting == 0 and
+            self.current_epoch + 1 < self.hparams.max_epochs):
+            self.reinit_last_layer()
 
     def test_epoch(self):
         total_reward = 0

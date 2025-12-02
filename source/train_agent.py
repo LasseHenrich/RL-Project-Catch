@@ -28,7 +28,7 @@ def train(hparams, config=None):
     start_from_scratch_with_ckpt = hparams.pop("start_from_scratch_with_ckpt")
     reinit_last_layer = hparams.pop("reinit_last_layer")
     hparams.pop('run_name')
-    max_epochs = hparams.pop('max_epochs')
+    max_epochs = hparams.get('max_epochs')
     log_video = hparams.pop('log_video')
 
     callbacks = []
