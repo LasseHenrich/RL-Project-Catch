@@ -49,6 +49,7 @@ class CatchRLModule(LightningModule):
                  hidden_size: int = 128,
                  n_filters: int = 32,
                  paddle_width: int = 5,
+                 periodic_resetting: int = 0,
                  *args: Any,
                  **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
@@ -98,6 +99,67 @@ class CatchRLModule(LightningModule):
         self.episode = 0
         self.episode_reward = 0
         self.batch_step = 0
+
+    def reinit_last_layer(self):
+        """Re-initializes the last fully-connected layers of the Q-network
+        (and target network) and resets optimizer state."""
+
+        print("Re-initializing last layer(s) of the network.")
+
+        # Only works for architectures with ff head (i.e., DeepQNetwork)
+        if not hasattr(self.Q_network, "ff"):
+            print("ERROR: Resetting only supported for architectures with an 'ff' head.")
+            return
+
+        # ------------------------------
+        # Helper function: collect FC layers
+        # ------------------------------
+        def get_last_layer_params(net):
+            layers = []
+            for m in net.ff:
+                if isinstance(m, nn.Linear):
+                    layers.append(m)
+            return layers
+
+        q_last_layers = get_last_layer_params(self.Q_network)
+        tgt_last_layers = get_last_layer_params(self.target_Q_network)
+
+        # ------------------------------
+        # 1. Reset parameters
+        # ------------------------------
+        for layer in q_last_layers:
+            layer.reset_parameters()
+
+        for layer in tgt_last_layers:
+            layer.reset_parameters()
+
+        # ------------------------------
+        # 2. Reset optimizer state
+        # ------------------------------
+        try:
+            optimizers = self.optimizers()
+        except RuntimeError: # may happen during initial reset
+            print("WARNING: Could not retrieve optimizers to reset.")
+            return
+
+        # If a single optimizer is returned
+        if isinstance(optimizers, Optimizer):
+            opt_list = [optimizers]
+        else:
+            opt_list = list(optimizers)
+
+        # Gather all parameters that must have state cleared
+        reset_params = {
+            p
+            for layer in (q_last_layers + tgt_last_layers)
+            for p in layer.parameters()
+        }
+
+        for opt in opt_list:
+            for group in opt.param_groups:
+                for p in group["params"]:
+                    if p in reset_params and p in opt.state:
+                        opt.state[p].clear()
 
     def compute_next_Q(self, batch: Trajectory) -> Tensor:
         raise NotImplementedError
@@ -231,8 +293,12 @@ class CatchRLModule(LightningModule):
                          on_step=True, on_epoch=True, prog_bar=False)
                 self.episode += 1
                 self.episode_reward = 0
+
                 if self.episode % self.hparams.episodes_per_epoch == 0:
                     self.dataset.end()
+
+                if self.hparams.periodic_resetting > 0 and self.episode % self.hparams.periodic_resetting == 0:
+                    self.reinit_last_layer()
 
         return loss
 
